@@ -1,0 +1,36 @@
+name: Build APK
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Docker
+      uses: docker/setup-buildx-action@v3
+    
+    - name: Build APK Debug
+      run: |
+        docker compose -f docker-compose.build.debug.yml up --build
+    
+    - name: Upload APK Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: robin-debug-apk
+        path: apk-output/Robin-debug.apk
+        retention-days: 30
+    
+    - name: Upload APK Release (unsigned)
+      uses: actions/upload-artifact@v4
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      with:
+        name: robin-release-unsigned
+        path: apk-output/Robin-release.apk
+        retention-days: 30
