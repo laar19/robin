@@ -7,6 +7,13 @@ echo ""
 echo "📦 Instalando dependencias..."
 npm install
 
+echo "📥 Descargando modelos ML (si no existen)..."
+if [ ! -d "models/vosk-model-small-es-0.42" ] || [ ! -f "models/ggml-tiny.bin" ] || [ ! -f "models/es_ES-mls-medium.onnx" ]; then
+    ./scripts/download-models.sh
+else
+    echo "  ✓ Modelos ya presentes"
+fi
+
 echo "🔨 Construyendo build de producción..."
 npm run build
 
