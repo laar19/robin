@@ -51,34 +51,28 @@ Robin es una aplicación Android de código abierto para reconocimiento de voz (
 ### 1. Clonar el repositorio
 
 ```bash
-git clone https://github.com/TU_USUARIO/robin.git
+git clone https://github.com/laar19/robin.git
 cd robin
 ```
 
-### 2. Descargar modelos ML (opcional, se pueden incluir en el build)
+### 2. Construir APK Debug
 
 ```bash
-./scripts/download-models.sh
-```
-
-Esto descarga:
-- Vosk modelo español small (~42MB)
-- Whisper tiny (~75MB)
-- Piper TTS español (~100MB)
-
-### 3. Construir APK Debug
-
-```bash
-# Usando Docker (recomendado)
+# Usando Docker (recomendado - descarga modelos automáticamente)
 ./scripts/build-apk.sh
 
-# O manualmente
+# O manualmente con docker compose
 docker compose -f docker-compose.build.debug.yml up --build
 ```
 
+**Nota:** Los modelos ML (~215MB) se descargan automáticamente durante el build:
+- Vosk modelo español (~42MB)
+- Whisper tiny (~75MB)
+- Piper TTS (~100MB)
+
 El APK se genera en: `apk-output/Robin-debug.apk`
 
-### 4. Instalar en dispositivo
+### 3. Instalar en dispositivo
 
 ```bash
 adb install apk-output/Robin-debug.apk
@@ -221,6 +215,12 @@ npm run cap:sync
 npm run test
 ```
 
+### Descargar modelos manualmente (opcional)
+
+```bash
+./scripts/download-models.sh
+```
+
 ## 📄 Licencia
 
 Este proyecto está bajo la licencia [GNU Affero General Public License v3.0](LICENSE).
@@ -239,8 +239,8 @@ Este proyecto está bajo la licencia [GNU Affero General Public License v3.0](LI
 
 ## 📞 Soporte
 
-- **Issues:** [GitHub Issues](https://github.com/TU_USUARIO/robin/issues)
-- **Discusión:** [GitHub Discussions](https://github.com/TU_USUARIO/robin/discussions)
+- **Issues:** [GitHub Issues](https://github.com/laar19/robin/issues)
+- **Discusión:** [GitHub Discussions](https://github.com/laar19/robin/discussions)
 
 ## 🙏 Agradecimientos
 
