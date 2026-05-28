@@ -55,20 +55,23 @@ git clone https://github.com/laar19/robin.git
 cd robin
 ```
 
-### 2. Construir APK Debug
+### 2. Construir APK Debug (todo en Docker)
 
 ```bash
-# Usando Docker (recomendado - descarga modelos automáticamente)
-./scripts/build-apk.sh
-
-# O manualmente con docker compose
+# Un solo comando - construye imagen y ejecuta contenedor
 docker compose -f docker-compose.build.debug.yml up --build
 ```
 
-**Nota:** Los modelos ML (~215MB) se descargan automáticamente durante el build:
-- Vosk modelo español (~42MB)
-- Whisper tiny (~75MB)
-- Piper TTS (~100MB)
+**El contenedor hace automáticamente:**
+1. Instala dependencias npm
+2. Descarga modelos ML (~215MB): Vosk, Whisper, Piper
+3. Build de producción Vite
+4. Sync con Capacitor Android
+5. Copia modelos a `android/app/src/main/assets/models/`
+6. Ejecuta Gradle `assembleDebug`
+7. Copia APK a `apk-output/` (volumen montado)
+
+**Nota:** Todo ocurre **dentro del contenedor**. No necesitas instalar nada en tu PC excepto Docker.
 
 El APK se genera en: `apk-output/Robin-debug.apk`
 
@@ -80,7 +83,7 @@ adb install apk-output/Robin-debug.apk
 
 ## 🐳 Docker Builder
 
-El proyecto incluye un contenedor Docker con todo lo necesario para build:
+El proyecto usa Docker para builds reproducibles. **Todo el build ocurre dentro del contenedor.**
 
 | Imagen | Tamaño | Uso |
 |--------|--------|-----|
@@ -88,18 +91,34 @@ El proyecto incluye un contenedor Docker con todo lo necesario para build:
 | `Dockerfile.release` | ~3-4 GB | Build APK Release |
 | `Dockerfile.dev` | ~500 MB | Desarrollo web |
 
-### Comandos útiles
+### Comandos
 
 ```bash
-# Build APK Debug
-./scripts/build-apk.sh debug
+# Build APK Debug (recomendado)
+docker compose -f docker-compose.build.debug.yml up --build
 
 # Build APK Release (requiere keystore)
-./scripts/build-apk.sh release
+docker compose -f docker-compose.build.release.yml up --build
 
-# Desarrollo web (puerto 5173)
+# Script wrapper (opcional)
+./scripts/build-apk.sh debug    # mismo que docker compose... debug
+./scripts/build-apk.sh release  # mismo que docker compose... release
+```
+
+### Volúmenes
+
+El contenedor monta:
+- `.` → `/app` (código fuente)
+- `./apk-output` → `/apk-output` (APK generado)
+- `/var/run/docker.sock` (para operaciones Docker si necesarias)
+
+### Desarrollo web
+
+```bash
 docker compose -f docker-compose.dev.yml up
 ```
+
+Accede a http://localhost:5173
 
 ## 📁 Estructura del proyecto
 
