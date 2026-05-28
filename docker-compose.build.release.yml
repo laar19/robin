@@ -1,0 +1,17 @@
+services:
+  apk-builder-release:
+    build:
+      context: .
+      dockerfile: Dockerfile.release
+    container_name: robin-apk-builder-release
+    volumes:
+      - .:/app
+      - ./apk-output:/apk-output
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - KEY_ALIAS=${KEY_ALIAS:-robin}
+      - KEY_PASSWORD=${KEY_PASSWORD:-robin2025}
+      - STORE_PASSWORD=${STORE_PASSWORD:-robin2025}
+      - STORE_FILE=${STORE_FILE:-android/keystore/robin-release.keystore}
+    command: ./scripts/generate-apk-release.sh
+    privileged: true

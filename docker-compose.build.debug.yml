@@ -1,0 +1,17 @@
+services:
+  apk-builder-debug:
+    build:
+      context: .
+      dockerfile: Dockerfile.debug
+    container_name: robin-apk-builder-debug
+    volumes:
+      - .:/app
+      - ./apk-output:/apk-output
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - VITE_APP_NAME=Robin
+      - VITE_DEFAULT_STT=vosk
+      - VITE_DEFAULT_TTS=android
+      - VITE_DEFAULT_LANG=es
+    command: ./scripts/generate-apk-debug.sh
+    privileged: true
