@@ -6,6 +6,7 @@ import LanguageSelector from './components/LanguageSelector'
 import StatusBar from './components/StatusBar'
 import AudioPlayer from './components/AudioPlayer'
 import { requestPermissions, checkPermissions } from './services/permissions'
+import { VoskPlugin, TtsPlugin, WhisperPlugin, PiperPlugin } from './services/capacitor-plugins'
 
 export default function App() {
   const [sttEngine, setSttEngine] = useState('vosk')
@@ -16,13 +17,27 @@ export default function App() {
   const [isRecording, setIsRecording] = useState(false)
   const [error, setError] = useState(null)
   const [permissionsGranted, setPermissionsGranted] = useState(false)
+  const [darkMode, setDarkMode] = useState(() => {
+    const saved = localStorage.getItem('darkMode')
+    return saved !== null ? JSON.parse(saved) : true
+  })
 
   useEffect(() => {
     initApp()
   }, [])
 
+  useEffect(() => {
+    localStorage.setItem('darkMode', JSON.stringify(darkMode))
+    if (darkMode) {
+      document.documentElement.classList.add('dark')
+      document.documentElement.classList.remove('light')
+    } else {
+      document.documentElement.classList.add('light')
+      document.documentElement.classList.remove('dark')
+    }
+  }, [darkMode])
+
   async function initApp() {
-    // Pedir permisos primero
     const permResult = await requestPermissions()
     const audioGranted = permResult.permissions?.some(p => p.permission === 'RECORD_AUDIO' && p.status === 'granted')
     
@@ -33,12 +48,10 @@ export default function App() {
     }
     
     setPermissionsGranted(true)
-    setStatus('ready')
     
-    // Inicializar motores
     try {
-      await Capacitor.Plugins.VoskPlugin.init({ lang: language })
-      await Capacitor.Plugins.TtsPlugin.init()
+      await VoskPlugin.init({ lang: language })
+      await TtsPlugin.init()
       setStatus('ready')
     } catch (e) {
       setError(`Error inicializando: ${e.message}`)
@@ -51,7 +64,7 @@ export default function App() {
       setIsRecording(true)
       setStatus('listening')
       setError(null)
-      await Capacitor.Plugins.VoskPlugin.startListening()
+      await VoskPlugin.startListening()
     } catch (e) {
       setError(`Error de grabación: ${e.message}`)
       setIsRecording(false)
@@ -63,7 +76,7 @@ export default function App() {
     try {
       setIsRecording(false)
       setStatus('processing')
-      await Capacitor.Plugins.VoskPlugin.stopListening()
+      await VoskPlugin.stopListening()
       setStatus('ready')
     } catch (e) {
       setError(`Error al detener: ${e.message}`)
@@ -75,7 +88,7 @@ export default function App() {
     try {
       setStatus('speaking')
       setError(null)
-      await Capacitor.Plugins.TtsPlugin.speak({ text, lang: language, speed: 1.0 })
+      await TtsPlugin.speak({ text, lang: language, speed: 1.0 })
       setStatus('ready')
     } catch (e) {
       setError(`Error TTS: ${e.message}`)
@@ -83,10 +96,28 @@ export default function App() {
     }
   }
 
+  function toggleTheme() {
+    setDarkMode(!darkMode)
+  }
+
   return (
-    <div className="app-container">
+    <div className={`app-container ${darkMode ? 'dark' : 'light'}`}>
       <header>
-        <h1>Robin</h1>
+        <div className="header-top">
+          <h1>Robin</h1>
+          <button className="theme-toggle" onClick={toggleTheme} title="Cambiar tema">
+            {darkMode ? (
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="12" cy="12" r="5"/>
+                <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
+              </svg>
+            ) : (
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/>
+              </svg>
+            )}
+          </button>
+        </div>
         <StatusBar status={status} />
       </header>
 

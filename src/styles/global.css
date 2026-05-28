@@ -1,13 +1,34 @@
 :root {
+  --radius: 12px;
+}
+
+/* Dark theme (default) */
+.light {
+  --bg: #f5f5f5;
+  --surface: #ffffff;
+  --surface2: #e0e0e0;
+  --surface3: #d0d0d0;
+  --primary: #e94560;
+  --text: #1a1a2e;
+  --text2: #555555;
+  --text3: #888888;
+  --success: #10b981;
+  --error: #e94560;
+  --border: #e0e0e0;
+}
+
+.dark {
   --bg: #1a1a2e;
   --surface: #16213e;
   --surface2: #0f3460;
+  --surface3: #1a2744;
   --primary: #e94560;
-  --text: #eee;
-  --text2: #aaa;
+  --text: #eeeeee;
+  --text2: #aaaaaa;
+  --text3: #888888;
   --success: #4ecca3;
   --error: #e94560;
-  --radius: 12px;
+  --border: #2a2a4a;
 }
 
 * {
@@ -21,6 +42,7 @@ body {
   background: var(--bg);
   color: var(--text);
   min-height: 100vh;
+  transition: background 0.3s ease, color 0.3s ease;
 }
 
 .app-container {
@@ -30,11 +52,48 @@ body {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+  transition: background 0.3s ease;
 }
 
 header {
   text-align: center;
   padding: 20px 0;
+}
+
+.header-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.header-top h1 {
+  font-size: 1.8rem;
+  color: var(--primary);
+  margin: 0;
+}
+
+.theme-toggle {
+  background: var(--surface2);
+  border: none;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--text);
+  transition: all 0.2s;
+}
+
+.theme-toggle:hover {
+  background: var(--surface3);
+  transform: scale(1.1);
+}
+
+.theme-toggle:active {
+  transform: scale(0.95);
 }
 
 header h1 {
@@ -71,6 +130,7 @@ section {
   background: var(--surface);
   border-radius: var(--radius);
   padding: 16px;
+  transition: background 0.3s ease;
 }
 
 section h2 {
@@ -114,6 +174,7 @@ section h2 {
   background: var(--bg);
   border-radius: 8px;
   min-height: 60px;
+  transition: background 0.3s ease;
 }
 
 .transcription-box p {
@@ -136,6 +197,16 @@ section h2 {
   color: var(--text);
   font-size: 1rem;
   resize: vertical;
+  transition: all 0.3s ease;
+}
+
+.tts-form textarea::placeholder {
+  color: var(--text3);
+}
+
+.tts-form textarea:focus {
+  outline: none;
+  border-color: var(--primary);
 }
 
 .speak-button {
@@ -146,6 +217,11 @@ section h2 {
   color: var(--text);
   font-size: 1rem;
   cursor: pointer;
+  transition: all 0.2s;
+}
+
+.speak-button:active {
+  transform: scale(0.97);
 }
 
 .model-selector, .language-selector {
@@ -169,6 +245,12 @@ section h2 {
   background: var(--bg);
   color: var(--text);
   font-size: 0.95rem;
+  transition: all 0.3s ease;
+}
+
+.model-selector select:focus, .language-selector select:focus {
+  outline: none;
+  border-color: var(--primary);
 }
 
 .settings-section h3 {
@@ -195,4 +277,15 @@ footer {
   padding: 16px 0;
   color: var(--text2);
   font-size: 0.8rem;
+}
+
+.permissions-section {
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 24px;
+  text-align: center;
+}
+
+.permissions-section p {
+  color: var(--text2);
 }
