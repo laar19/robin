@@ -9,11 +9,13 @@ import com.getcapacitor.JSObject;
 import android.media.MediaExtractor;
 import android.media.MediaMuxer;
 import android.media.MediaFormat;
+import android.media.MediaCodec;
 import android.net.Uri;
 import android.content.Context;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 
 @CapacitorPlugin(name = "AudioExtractor")
 public class AudioExtractorPlugin extends Plugin {
@@ -54,8 +56,8 @@ public class AudioExtractorPlugin extends Plugin {
                 }
 
                 if (audioTrackIndex == -1) {
-                    call.reject("No audio track found in video");
                     extractor.release();
+                    call.reject("No audio track found in video");
                     return;
                 }
 
@@ -66,28 +68,31 @@ public class AudioExtractorPlugin extends Plugin {
 
                 int outputTrackIndex = muxer.addTrack(audioFormat);
                 muxer.start();
-
                 extractor.selectTrack(audioTrackIndex);
 
                 int sampleSize = 5 * 1024 * 1024;
-                java.nio.ByteBuffer buffer = java.nio.ByteBuffer.allocate(sampleSize);
+                ByteBuffer buffer = ByteBuffer.allocate(sampleSize);
                 long totalSize = 0;
                 long estimatedTotal = getEstimatedTotalSize(videoUri);
 
                 while (!isCancelled) {
-                    int offset = 0;
-                    int readSize = extractor.readSampleData(buffer, offset);
+                    buffer.clear();
+                    int readSize = extractor.readSampleData(buffer, 0);
 
                     if (readSize < 0) {
                         break;
                     }
 
+                    buffer.limit(readSize);
                     buffer.position(0);
 
-                    MediaFormat newFormat = extractor.getSampleTrackFormat();
-                    muxer.writeSampleData(outputTrackIndex, buffer, extractor.getSampleMetaInfo());
+                    MediaCodec.BufferInfo bufferInfo = new MediaCodec.BufferInfo();
+                    bufferInfo.offset = 0;
+                    bufferInfo.size = readSize;
+                    bufferInfo.presentationTimeUs = extractor.getSampleTime();
+                    bufferInfo.flags = extractor.getSampleFlags();
 
-                    buffer.clear();
+                    muxer.writeSampleData(outputTrackIndex, buffer, bufferInfo);
 
                     totalSize += readSize;
 
@@ -98,10 +103,11 @@ public class AudioExtractorPlugin extends Plugin {
                         notifyListeners("onProgress", progressData);
                     }
 
-                    extractor.advance();
+                    if (!extractor.advance()) {
+                        break;
+                    }
                 }
 
-                extractor.unselectTrack(audioTrackIndex);
                 muxer.stop();
                 muxer.release();
                 extractor.release();
