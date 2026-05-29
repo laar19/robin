@@ -4,7 +4,6 @@ import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
-import com.getcapacitor.annotation.Permission;
 import com.getcapacitor.annotation.PermissionCallback;
 import com.getcapacitor.JSObject;
 
@@ -15,11 +14,8 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.os.Build;
-import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
 
 import androidx.core.app.NotificationCompat;
-import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
 @CapacitorPlugin(name = "NotificationPlugin")
@@ -29,7 +25,6 @@ public class NotificationPlugin extends Plugin {
     private static final String CHANNEL_ID = "robin_transcription_channel";
     private static final String CHANNEL_NAME = "Transcripciones Robin";
     private static final int DEFAULT_NOTIFICATION_ID = 1000;
-    private static final int NOTIFICATION_PERMISSION_ID = 12345;
     
     @Override
     public void load() {
@@ -132,8 +127,7 @@ public class NotificationPlugin extends Plugin {
                 result.put("granted", true);
                 call.resolve(result);
             } else {
-                saveCall(call, "permissionCallback");
-                requestPermissionForPermissionResult(new String[]{android.Manifest.permission.POST_NOTIFICATIONS}, NOTIFICATION_PERMISSION_ID);
+                requestPermissionForPermissionResult(new String[]{android.Manifest.permission.POST_NOTIFICATIONS}, call, "permissionCallback");
             }
         } else {
             JSObject result = new JSObject();
