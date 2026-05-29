@@ -62,9 +62,6 @@ dependencies {
     // Vosk STT
     implementation 'net.java.dev.jna:jna:5.13.0@aar'
     implementation 'com.alphacephei:vosk-android:0.3.47@aar'
-    
-    // whisper.cpp for offline Whisper transcription
-    implementation 'com.github.ggerganov:whisper.cpp:1.0.3'
 }
 
 apply from: 'capacitor.build.gradle'
