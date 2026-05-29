@@ -4,7 +4,7 @@ import { WHISPER_MODELS } from '../services/whisperApiService'
 import { getStatsSummary, getApiCostStats } from '../services/statsService'
 import { getQueueStats } from '../services/queueService'
 import { getAllPrefs, resetPrefs } from '../services/preferencesService'
-import packageJson from '../../../package.json'
+import packageJson from '../../package.json'
 
 export default function SettingsScreen({ 
   isOpen, 
