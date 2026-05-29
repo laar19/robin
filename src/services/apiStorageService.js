@@ -1,9 +1,11 @@
 import { Capacitor } from '@capacitor/core'
+import { encrypt, decrypt, isKeyGenerated, migrateToKeystore } from './keystoreService'
 
 const KEYS = {
   API_KEY: 'whisper_api_key',
   BASE_URL: 'whisper_base_url',
   MODEL: 'whisper_model',
+  MIGRATED: 'keystore_migrated',
 }
 
 const DEFAULTS = {
@@ -11,28 +13,62 @@ const DEFAULTS = {
   MODEL: 'whisper-large-v3',
 }
 
-// Simple XOR encryption for basic obfuscation (not cryptographically secure)
-// For production, use Android Keystore via native plugin
+// Simple XOR encryption for migration fallback
+const XOR_KEY = 'robin_app_key_2024'
+
 function simpleEncrypt(text) {
-  const key = 'robin_app_key_2024'
   let result = ''
   for (let i = 0; i < text.length; i++) {
-    result += String.fromCharCode(text.charCodeAt(i) ^ key.charCodeAt(i % key.length))
+    result += String.fromCharCode(text.charCodeAt(i) ^ XOR_KEY.charCodeAt(i % XOR_KEY.length))
   }
   return btoa(result)
 }
 
 function simpleDecrypt(encrypted) {
   try {
-    const key = 'robin_app_key_2024'
     const decrypted = atob(encrypted)
     let result = ''
     for (let i = 0; i < decrypted.length; i++) {
-      result += String.fromCharCode(decrypted.charCodeAt(i) ^ key.charCodeAt(i % key.length))
+      result += String.fromCharCode(decrypted.charCodeAt(i) ^ XOR_KEY.charCodeAt(i % XOR_KEY.length))
     }
     return result
   } catch (e) {
     return encrypted
+  }
+}
+
+async function getXorKey() {
+  if (Capacitor.isNativePlatform()) {
+    const { Preferences } = await import('@capacitor/preferences')
+    const result = await Preferences.get({ key: KEYS.API_KEY })
+    return result.value
+  } else {
+    return localStorage.getItem(KEYS.API_KEY)
+  }
+}
+
+async function saveEncryptedKey(encryptedKey) {
+  if (Capacitor.isNativePlatform()) {
+    const { Preferences } = await import('@capacitor/preferences')
+    await Preferences.set({ key: KEYS.API_KEY, value: encryptedKey })
+  } else {
+    localStorage.setItem(KEYS.API_KEY, encryptedKey)
+  }
+}
+
+export async function migrateIfNeeded() {
+  try {
+    const migrated = await migrateToKeystore(getXorKey, saveEncryptedKey)
+    if (migrated) {
+      if (Capacitor.isNativePlatform()) {
+        const { Preferences } = await import('@capacitor/preferences')
+        await Preferences.set({ key: KEYS.MIGRATED, value: 'true' })
+      } else {
+        localStorage.setItem(KEYS.MIGRATED, 'true')
+      }
+    }
+  } catch (e) {
+    console.error('Migration failed:', e)
   }
 }
 
@@ -86,33 +122,46 @@ export async function saveApiKey(key) {
   }
   
   try {
+    // Encrypt with Keystore
+    const encrypted = await encrypt(key.trim())
+    
     if (Capacitor.isNativePlatform()) {
       const { Preferences } = await import('@capacitor/preferences')
-      const encrypted = simpleEncrypt(key.trim())
       await Preferences.set({ key: KEYS.API_KEY, value: encrypted })
     } else {
-      localStorage.setItem(KEYS.API_KEY, simpleEncrypt(key.trim()))
+      localStorage.setItem(KEYS.API_KEY, encrypted)
     }
   } catch (e) {
     console.error('Error saving API key:', e)
-    localStorage.setItem(KEYS.API_KEY, simpleEncrypt(key.trim()))
+    throw e
   }
 }
 
 export async function getApiKey() {
+  let encrypted = null
+  
   try {
     if (Capacitor.isNativePlatform()) {
       const { Preferences } = await import('@capacitor/preferences')
       const result = await Preferences.get({ key: KEYS.API_KEY })
-      return result.value ? simpleDecrypt(result.value) : null
+      encrypted = result.value
     } else {
-      const stored = localStorage.getItem(KEYS.API_KEY)
-      return stored ? simpleDecrypt(stored) : null
+      encrypted = localStorage.getItem(KEYS.API_KEY)
     }
+    
+    if (!encrypted) {
+      return null
+    }
+    
+    // Decrypt with Keystore
+    return await decrypt(encrypted)
   } catch (e) {
     console.error('Error getting API key:', e)
-    const stored = localStorage.getItem(KEYS.API_KEY)
-    return stored ? simpleDecrypt(stored) : null
+    // Fallback: try XOR decryption for migration
+    if (encrypted) {
+      return simpleDecrypt(encrypted)
+    }
+    return null
   }
 }
 
@@ -194,6 +243,9 @@ export async function getModel() {
 }
 
 export async function getAllConfig() {
+  // Run migration first
+  await migrateIfNeeded()
+  
   const [apiKey, baseUrl, model] = await Promise.all([
     getApiKey(),
     getBaseUrl(),
@@ -210,6 +262,7 @@ export async function saveAllConfig(config) {
   ])
 }
 
-export function isApiKeyConfigured() {
-  return getApiKey().then(key => !!key)
+export async function isApiKeyConfigured() {
+  const key = await getApiKey()
+  return !!key
 }

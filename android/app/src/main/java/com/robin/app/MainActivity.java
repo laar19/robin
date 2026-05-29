@@ -13,5 +13,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(PiperPlugin.class);
         registerPlugin(FileHandlerPlugin.class);
         registerPlugin(AudioExtractorPlugin.class);
+        registerPlugin(KeystorePlugin.class);
+        registerPlugin(NotificationPlugin.class);
     }
 }

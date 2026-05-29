@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react'
+import { VoskPlugin, WhisperPlugin } from '../services/capacitor-plugins'
 import EngineSelector from './EngineSelector'
 import ProgressBar from './ProgressBar'
 import TranscriptionResult from './TranscriptionResult'
 import { transcribeAudio, cancelTranscription, estimateCostFromFile, WHISPER_MODELS } from '../services/whisperApiService'
 import { getAllConfig } from '../services/apiStorageService'
-import { getLastEngine, setLastEngine } from '../services/preferencesService'
 import { 
   getFileIcon, 
   formatFileSize, 
@@ -17,6 +17,8 @@ import {
 import { addToQueue, updateItemStatus, STATUS } from '../services/queueService'
 import { recordTranscription } from '../services/statsService'
 import { addToHistory } from '../services/historyService'
+import { showTranscriptionComplete, showTranscriptionProgress } from '../services/notificationService'
+import { setLastEngine } from '../services/preferencesService'
 
 export default function FileShareModal({ isOpen, file, onClose, sttEngine: globalSttEngine }) {
   const [status, setStatus] = useState('idle')
@@ -27,15 +29,13 @@ export default function FileShareModal({ isOpen, file, onClose, sttEngine: globa
   const [estimatedCost, setEstimatedCost] = useState(null)
   const [confirmed, setConfirmed] = useState(false)
   const [selectedEngine, setSelectedEngine] = useState(globalSttEngine || 'vosk')
+  const [language, setLanguage] = useState('es')
   
   const maxSizes = getMaxFileSize()
 
   useEffect(() => {
     if (isOpen && file) {
-      // Usar último motor usado o el global
-      getLastEngine().then(lastEngine => {
-        setSelectedEngine(lastEngine || globalSttEngine || 'vosk')
-      })
+      setSelectedEngine(globalSttEngine || 'vosk')
       validateAndPrepare()
     }
     return () => {
@@ -46,7 +46,6 @@ export default function FileShareModal({ isOpen, file, onClose, sttEngine: globa
   }, [isOpen, file])
 
   useEffect(() => {
-    // Actualizar cuando cambia el engine seleccionado
     if (file && selectedEngine === 'whisper-api') {
       const cost = estimateCostFromFile(file.file, 'whisper-large-v3')
       setEstimatedCost(cost)
@@ -65,7 +64,6 @@ export default function FileShareModal({ isOpen, file, onClose, sttEngine: globa
 
     if (!file) return
 
-    // Validate file size
     const sizeValidation = validateFileSize(file)
     if (!sizeValidation.valid) {
       setError(sizeValidation.error)
@@ -73,7 +71,6 @@ export default function FileShareModal({ isOpen, file, onClose, sttEngine: globa
       return
     }
 
-    // Check API Key if using Whisper API
     if (selectedEngine === 'whisper-api') {
       const config = await getAllConfig()
       if (!config.apiKey) {
@@ -82,7 +79,6 @@ export default function FileShareModal({ isOpen, file, onClose, sttEngine: globa
         return
       }
       
-      // Estimate cost
       const cost = estimateCostFromFile(file.file, config.model)
       setEstimatedCost(cost)
     }
@@ -92,10 +88,8 @@ export default function FileShareModal({ isOpen, file, onClose, sttEngine: globa
     if (!file || !confirmed) return
 
     try {
-      // Guardar preferencia del motor usado
       setLastEngine(selectedEngine)
       
-      // Agregar a la cola
       const queueItem = addToQueue({
         file: {
           name: file.name,
@@ -156,10 +150,8 @@ export default function FileShareModal({ isOpen, file, onClose, sttEngine: globa
         setProgress(100)
         updateItemStatus(queueItem.id, STATUS.COMPLETED, 100, null, result.text)
         
-        // Record stats
         recordTranscription('whisper-api', config.model, result.duration || 0, estimatedCost || 0)
         
-        // Save to history
         addToHistory({
           text: result.text,
           filename: file.name,
@@ -169,37 +161,67 @@ export default function FileShareModal({ isOpen, file, onClose, sttEngine: globa
           cost: estimatedCost,
           isVideo: file.isVideo,
         })
+        
+        showTranscriptionComplete({
+          title: '✅ Transcripción Completa',
+          message: `${file.name} procesado con Whisper API`,
+          transcriptionId: queueItem.id,
+        })
 
       } else {
-        // Offline processing (Vosk or Whisper local)
-        // For now, we'll simulate offline processing
-        // In a real implementation, this would call the native plugins
+        // Offline processing (Vosk or Whisper local) - REAL IMPLEMENTATION
         setStatus('processing')
-        updateItemStatus(queueItem.id, STATUS.PROCESSING, 50)
+        updateItemStatus(queueItem.id, STATUS.PROCESSING, 20)
+        setProgress(20)
         
-        // Simular procesamiento offline
-        await new Promise(resolve => setTimeout(resolve, 2000))
-        
-        setStatus('complete')
-        setProgress(100)
-        updateItemStatus(queueItem.id, STATUS.COMPLETED, 100)
-        
-        // Placeholder text for offline
-        const offlineText = '[Procesamiento offline completado - Texto no disponible en esta demo]'
-        setTranscription(offlineText)
-        
-        // Record stats
-        recordTranscription(selectedEngine, null, 0, 0)
-        
-        // Save to history
-        addToHistory({
-          text: offlineText,
-          filename: file.name,
-          engine: selectedEngine,
-          duration: 0,
-          cost: 0,
-          isVideo: file.isVideo,
-        })
+        try {
+          let result
+          const filePath = extractedAudioPath || audioFile.path
+          
+          if (selectedEngine === 'vosk') {
+            // Vosk file transcription
+            result = await VoskPlugin.transcribeFile({ filePath })
+            
+            updateItemStatus(queueItem.id, STATUS.PROCESSING, 70)
+            setProgress(70)
+            
+          } else if (selectedEngine === 'whisper') {
+            // Whisper file transcription
+            result = await WhisperPlugin.transcribeFile({ 
+              filePath,
+              language: language || 'es',
+            })
+            
+            updateItemStatus(queueItem.id, STATUS.PROCESSING, 70)
+            setProgress(70)
+          }
+          
+          setTranscription(result.text)
+          setStatus('complete')
+          setProgress(100)
+          updateItemStatus(queueItem.id, STATUS.COMPLETED, 100, null, result.text)
+          
+          recordTranscription(selectedEngine, null, 0, 0)
+          
+          addToHistory({
+            text: result.text,
+            filename: file.name,
+            engine: selectedEngine,
+            duration: 0,
+            cost: 0,
+            isVideo: file.isVideo,
+          })
+          
+          showTranscriptionComplete({
+            title: '✅ Transcripción Completa',
+            message: `${file.name} procesado con ${selectedEngine === 'vosk' ? 'Vosk' : 'Whisper'}`,
+            transcriptionId: queueItem.id,
+          })
+          
+        } catch (e) {
+          updateItemStatus(queueItem.id, STATUS.FAILED, 0, e.message)
+          throw e
+        }
       }
 
     } catch (e) {
