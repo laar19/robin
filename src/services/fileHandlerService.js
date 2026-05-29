@@ -9,6 +9,10 @@ const AudioExtractorPlugin = Capacitor.isNativePlatform()
   ? registerPlugin('AudioExtractor')
   : null
 
+// File size limits (in bytes)
+const MAX_FILE_SIZE = 100 * 1024 * 1024 // 100MB default
+const MAX_VIDEO_SIZE = 500 * 1024 * 1024 // 500MB for videos
+
 export async function getSharedFile() {
   if (!FileHandlerPlugin) {
     return null
@@ -56,6 +60,15 @@ export async function cancelAudioExtraction() {
   }
 }
 
+export async function cleanupExtractedFile(audioPath) {
+  if (!AudioExtractorPlugin) return
+  try {
+    await AudioExtractorPlugin.cleanup({ filePath: audioPath })
+  } catch (e) {
+    console.error('Error cleaning up file:', e)
+  }
+}
+
 export function getFileIcon(type) {
   if (type?.startsWith('video/')) return '📹'
   if (type?.startsWith('audio/')) return '🎵'
@@ -69,6 +82,25 @@ export function formatFileSize(bytes) {
     return `${(mb / 1024).toFixed(2)} GB`
   }
   return `${mb.toFixed(2)} MB`
+}
+
+export function validateFileSize(file) {
+  if (!file?.size) {
+    return { valid: true, error: null }
+  }
+  
+  const isVideo = file.type?.startsWith('video/')
+  const maxSize = isVideo ? MAX_VIDEO_SIZE : MAX_FILE_SIZE
+  const maxMB = maxSize / (1024 * 1024)
+  
+  if (file.size > maxSize) {
+    return {
+      valid: false,
+      error: `Archivo muy grande. Máximo ${maxMB}MB. Este archivo: ${formatFileSize(file.size)}`
+    }
+  }
+  
+  return { valid: true, error: null }
 }
 
 export function getSupportedFormats() {
@@ -86,4 +118,21 @@ export function isSupportedFile(file) {
   const ext = type.split('/')[1]?.toLowerCase()
   
   return type.startsWith('audio/') || type.startsWith('video/')
+}
+
+export function getSupportedFormatsList() {
+  const formats = getSupportedFormats()
+  return {
+    audio: formats.audio.map(f => `.${f}`).join(', '),
+    video: formats.video.map(f => `.${f}`).join(', '),
+  }
+}
+
+export function getMaxFileSize() {
+  return {
+    audio: MAX_FILE_SIZE,
+    video: MAX_VIDEO_SIZE,
+    audioFormatted: formatFileSize(MAX_FILE_SIZE),
+    videoFormatted: formatFileSize(MAX_VIDEO_SIZE),
+  }
 }

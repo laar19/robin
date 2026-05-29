@@ -21,6 +21,7 @@ import java.nio.ByteBuffer;
 public class AudioExtractorPlugin extends Plugin {
 
     private volatile boolean isCancelled = false;
+    private String lastExtractedPath = null;
 
     @PluginMethod()
     public void extractAudio(PluginCall call) {
@@ -118,6 +119,8 @@ public class AudioExtractorPlugin extends Plugin {
                     return;
                 }
 
+                lastExtractedPath = outputFile.getAbsolutePath();
+
                 JSObject result = new JSObject();
                 result.put("audioPath", outputFile.getAbsolutePath());
                 result.put("audioUri", Uri.fromFile(outputFile).toString());
@@ -136,6 +139,58 @@ public class AudioExtractorPlugin extends Plugin {
     public void cancelExtraction(PluginCall call) {
         isCancelled = true;
         call.resolve();
+    }
+
+    @PluginMethod()
+    public void cleanup(PluginCall call) {
+        String filePath = call.getString("filePath");
+        
+        if (filePath == null && lastExtractedPath != null) {
+            filePath = lastExtractedPath;
+        }
+        
+        if (filePath != null) {
+            try {
+                File file = new File(filePath);
+                if (file.exists()) {
+                    file.delete();
+                }
+                lastExtractedPath = null;
+                call.resolve();
+            } catch (Exception e) {
+                call.reject("Error cleaning up file: " + e.getMessage());
+            }
+        } else {
+            call.reject("No file path provided");
+        }
+    }
+
+    @PluginMethod()
+    public void cleanupAll(PluginCall call) {
+        try {
+            File cacheDir = new File(getContext().getCacheDir(), "robin_extracted");
+            if (cacheDir.exists()) {
+                deleteDirectory(cacheDir);
+            }
+            lastExtractedPath = null;
+            call.resolve();
+        } catch (Exception e) {
+            call.reject("Error cleaning up: " + e.getMessage());
+        }
+    }
+
+    private void deleteDirectory(File dir) {
+        if (dir.isDirectory()) {
+            File[] files = dir.listFiles();
+            if (files != null) {
+                for (File file : files) {
+                    deleteDirectory(file);
+                }
+            }
+            dir.delete();
+        } else {
+            dir.delete();
+        }
     }
 
     private long getEstimatedTotalSize(String videoUri) {

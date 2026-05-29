@@ -2,6 +2,27 @@ import axios from 'axios'
 
 let abortController = null
 
+// Whisper API pricing (per minute of audio)
+// Updated as of 2024, verify current pricing at platform.openai.com
+const PRICING = {
+  'whisper-large-v3': 0.0006,
+  'whisper-large-v3-turbo': 0.0003,
+  'whisper-1': 0.0006,
+}
+
+export function estimateCost(durationSeconds, model = 'whisper-large-v3') {
+  const pricePerMinute = PRICING[model] || PRICING['whisper-1']
+  const minutes = durationSeconds / 60
+  return (minutes * pricePerMinute).toFixed(4)
+}
+
+export function estimateCostFromFile(file, model = 'whisper-large-v3') {
+  // Rough estimate: 1MB ≈ 1 minute of audio (varies by codec)
+  const sizeMB = file.size / (1024 * 1024)
+  const estimatedMinutes = sizeMB
+  return estimateCost(estimatedMinutes * 60, model)
+}
+
 export async function transcribeAudio(file, options = {}) {
   const {
     apiKey,
@@ -86,7 +107,26 @@ export async function testConnection(apiKey, baseUrl = 'https://api.openai.com/v
 }
 
 export const WHISPER_MODELS = [
-  { value: 'whisper-large-v3', label: 'Whisper Large v3 (Mayor precisión)' },
-  { value: 'whisper-large-v3-turbo', label: 'Whisper Large v3 Turbo (Más rápido)' },
-  { value: 'whisper-1', label: 'Whisper-1 (Default)' },
+  { 
+    value: 'whisper-large-v3', 
+    label: 'Whisper Large v3',
+    description: 'Mayor precisión, más lento',
+    price: '$0.0006/min'
+  },
+  { 
+    value: 'whisper-large-v3-turbo', 
+    label: 'Whisper Large v3 Turbo',
+    description: 'Más rápido, buena precisión',
+    price: '$0.0003/min'
+  },
+  { 
+    value: 'whisper-1', 
+    label: 'Whisper-1',
+    description: 'Modelo default',
+    price: '$0.0006/min'
+  },
 ]
+
+export function getModelPricing(model) {
+  return PRICING[model] || PRICING['whisper-1']
+}

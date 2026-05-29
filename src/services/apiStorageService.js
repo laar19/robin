@@ -11,17 +11,91 @@ const DEFAULTS = {
   MODEL: 'whisper-large-v3',
 }
 
+// Simple XOR encryption for basic obfuscation (not cryptographically secure)
+// For production, use Android Keystore via native plugin
+function simpleEncrypt(text) {
+  const key = 'robin_app_key_2024'
+  let result = ''
+  for (let i = 0; i < text.length; i++) {
+    result += String.fromCharCode(text.charCodeAt(i) ^ key.charCodeAt(i % key.length))
+  }
+  return btoa(result)
+}
+
+function simpleDecrypt(encrypted) {
+  try {
+    const key = 'robin_app_key_2024'
+    const decrypted = atob(encrypted)
+    let result = ''
+    for (let i = 0; i < decrypted.length; i++) {
+      result += String.fromCharCode(decrypted.charCodeAt(i) ^ key.charCodeAt(i % key.length))
+    }
+    return result
+  } catch (e) {
+    return encrypted
+  }
+}
+
+export function validateApiKey(key) {
+  if (!key || typeof key !== 'string') {
+    return { valid: false, error: 'API Key es requerida' }
+  }
+  
+  const trimmed = key.trim()
+  
+  if (trimmed.length < 20) {
+    return { valid: false, error: 'API Key demasiado corta' }
+  }
+  
+  if (!trimmed.startsWith('sk-') && !trimmed.startsWith('http')) {
+    return { 
+      valid: false, 
+      error: 'Formato inválido. Debe comenzar con "sk-" o ser una URL de proxy' 
+    }
+  }
+  
+  return { valid: true, error: null }
+}
+
+export function validateBaseUrl(url) {
+  if (!url || typeof url !== 'string') {
+    return { valid: false, error: 'URL es requerida' }
+  }
+  
+  const trimmed = url.trim()
+  
+  if (!trimmed.startsWith('https://')) {
+    return { 
+      valid: false, 
+      error: 'URL debe comenzar con https:// para seguridad' 
+    }
+  }
+  
+  try {
+    new URL(trimmed)
+    return { valid: true, error: null }
+  } catch (e) {
+    return { valid: false, error: 'URL inválida' }
+  }
+}
+
 export async function saveApiKey(key) {
+  const validation = validateApiKey(key)
+  if (!validation.valid) {
+    throw new Error(validation.error)
+  }
+  
   try {
     if (Capacitor.isNativePlatform()) {
       const { Preferences } = await import('@capacitor/preferences')
-      await Preferences.set({ key: KEYS.API_KEY, value: key })
+      const encrypted = simpleEncrypt(key.trim())
+      await Preferences.set({ key: KEYS.API_KEY, value: encrypted })
     } else {
-      localStorage.setItem(KEYS.API_KEY, key)
+      localStorage.setItem(KEYS.API_KEY, simpleEncrypt(key.trim()))
     }
   } catch (e) {
     console.error('Error saving API key:', e)
-    localStorage.setItem(KEYS.API_KEY, key)
+    localStorage.setItem(KEYS.API_KEY, simpleEncrypt(key.trim()))
   }
 }
 
@@ -30,13 +104,15 @@ export async function getApiKey() {
     if (Capacitor.isNativePlatform()) {
       const { Preferences } = await import('@capacitor/preferences')
       const result = await Preferences.get({ key: KEYS.API_KEY })
-      return result.value
+      return result.value ? simpleDecrypt(result.value) : null
     } else {
-      return localStorage.getItem(KEYS.API_KEY)
+      const stored = localStorage.getItem(KEYS.API_KEY)
+      return stored ? simpleDecrypt(stored) : null
     }
   } catch (e) {
     console.error('Error getting API key:', e)
-    return localStorage.getItem(KEYS.API_KEY)
+    const stored = localStorage.getItem(KEYS.API_KEY)
+    return stored ? simpleDecrypt(stored) : null
   }
 }
 
@@ -55,16 +131,21 @@ export async function deleteApiKey() {
 }
 
 export async function saveBaseUrl(url) {
+  const validation = validateBaseUrl(url)
+  if (!validation.valid) {
+    throw new Error(validation.error)
+  }
+  
   try {
     if (Capacitor.isNativePlatform()) {
       const { Preferences } = await import('@capacitor/preferences')
-      await Preferences.set({ key: KEYS.BASE_URL, value: url })
+      await Preferences.set({ key: KEYS.BASE_URL, value: url.trim() })
     } else {
-      localStorage.setItem(KEYS.BASE_URL, url)
+      localStorage.setItem(KEYS.BASE_URL, url.trim())
     }
   } catch (e) {
     console.error('Error saving base URL:', e)
-    localStorage.setItem(KEYS.BASE_URL, url)
+    localStorage.setItem(KEYS.BASE_URL, url.trim())
   }
 }
 
@@ -127,4 +208,8 @@ export async function saveAllConfig(config) {
     config.baseUrl ? saveBaseUrl(config.baseUrl) : Promise.resolve(),
     config.model ? saveModel(config.model) : Promise.resolve(),
   ])
+}
+
+export function isApiKeyConfigured() {
+  return getApiKey().then(key => !!key)
 }

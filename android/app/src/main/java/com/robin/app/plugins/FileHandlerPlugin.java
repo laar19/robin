@@ -79,6 +79,24 @@ public class FileHandlerPlugin extends Plugin {
         call.resolve(result);
     }
 
+    @PluginMethod()
+    public void cleanupFile(PluginCall call) {
+        String filePath = call.getString("filePath");
+        if (filePath != null) {
+            try {
+                File file = new File(filePath);
+                if (file.exists()) {
+                    file.delete();
+                }
+                call.resolve();
+            } catch (Exception e) {
+                call.reject("Error cleaning up file: " + e.getMessage());
+            }
+        } else {
+            call.reject("File path required");
+        }
+    }
+
     private void handleShareIntent(Intent intent) {
         String action = intent.getAction();
         String type = intent.getType();
@@ -87,6 +105,24 @@ public class FileHandlerPlugin extends Plugin {
             if (type.startsWith("audio/") || type.startsWith("video/")) {
                 sharedFileUri = intent.getParcelableExtra(Intent.EXTRA_STREAM);
                 sharedFileType = type;
+                
+                // Take persistable URI permission for Android 11+
+                if (sharedFileUri != null) {
+                    try {
+                        getActivity().getContentResolver().takePersistableUriPermission(
+                            sharedFileUri,
+                            Intent.FLAG_GRANT_READ_URI_PERMISSION
+                        );
+                    } catch (SecurityException e) {
+                        // Permission not granted, but we can still try to access
+                        getActivity().grantUriPermission(
+                            getActivity().getPackageName(),
+                            sharedFileUri,
+                            Intent.FLAG_GRANT_READ_URI_PERMISSION
+                        );
+                    }
+                }
+                
                 notifyWebAppOfFile();
             }
         } else if (Intent.ACTION_SEND_MULTIPLE.equals(action) && type != null) {
@@ -95,6 +131,23 @@ public class FileHandlerPlugin extends Plugin {
                 if (uris != null && !uris.isEmpty()) {
                     sharedFileUri = uris.get(0);
                     sharedFileType = type;
+                    
+                    // Take persistable URI permission
+                    if (sharedFileUri != null) {
+                        try {
+                            getActivity().getContentResolver().takePersistableUriPermission(
+                                sharedFileUri,
+                                Intent.FLAG_GRANT_READ_URI_PERMISSION
+                            );
+                        } catch (SecurityException e) {
+                            getActivity().grantUriPermission(
+                                getActivity().getPackageName(),
+                                sharedFileUri,
+                                Intent.FLAG_GRANT_READ_URI_PERMISSION
+                            );
+                        }
+                    }
+                    
                     notifyWebAppOfFile();
                 }
             }
