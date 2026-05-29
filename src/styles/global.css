@@ -2,33 +2,34 @@
   --radius: 12px;
 }
 
-/* Dark theme (default) */
+/* Light theme (clean, professional) */
 .light {
-  --bg: #f5f5f5;
+  --bg: #f8f9fa;
   --surface: #ffffff;
-  --surface2: #e0e0e0;
-  --surface3: #d0d0d0;
-  --primary: #e94560;
-  --text: #1a1a2e;
-  --text2: #555555;
-  --text3: #888888;
-  --success: #10b981;
-  --error: #e94560;
-  --border: #e0e0e0;
+  --surface2: #e9ecef;
+  --surface3: #dee2e6;
+  --primary: #0d6efd;
+  --text: #212529;
+  --text2: #495057;
+  --text3: #6c757d;
+  --success: #198754;
+  --error: #dc3545;
+  --border: #dee2e6;
 }
 
+/* Dark theme (elegant, modern) */
 .dark {
-  --bg: #1a1a2e;
-  --surface: #16213e;
-  --surface2: #0f3460;
-  --surface3: #1a2744;
-  --primary: #e94560;
-  --text: #eeeeee;
-  --text2: #aaaaaa;
-  --text3: #888888;
-  --success: #4ecca3;
-  --error: #e94560;
-  --border: #2a2a4a;
+  --bg: #0f0f23;
+  --surface: #1a1a2e;
+  --surface2: #252540;
+  --surface3: #2d2d4a;
+  --primary: #4dabf7;
+  --text: #e9ecef;
+  --text2: #ced4da;
+  --text3: #adb5bd;
+  --success: #20c997;
+  --error: #ff6b6b;
+  --border: #2d2d44;
 }
 
 * {

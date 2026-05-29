@@ -1,4 +1,4 @@
-package com.robin.app;
+package com.robin.app.plugins;
 
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
