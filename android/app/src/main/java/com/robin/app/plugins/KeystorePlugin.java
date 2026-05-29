@@ -11,15 +11,6 @@ import android.security.keystore.KeyProperties;
 import android.util.Base64;
 
 import java.security.KeyStore;
-import java.security.KeyGenerator;
-import java.security.SecretKey;
-import java.security.Key;
-import java.security.KeyStoreException;
-import java.security.NoSuchAlgorithmException;
-import java.security.UnrecoverableKeyException;
-import java.security.InvalidKeyException;
-import java.security.InvalidAlgorithmParameterException;
-
 import javax.crypto.Cipher;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.KeyGenerator;
@@ -42,7 +33,6 @@ public class KeystorePlugin extends Plugin {
             keyStore = KeyStore.getInstance(ANDROID_KEYSTORE);
             keyStore.load(null);
             
-            // Generate key if not exists
             if (!keyStore.containsAlias(KEY_ALIAS)) {
                 generateKey();
             }
@@ -67,7 +57,6 @@ public class KeystorePlugin extends Plugin {
             byte[] iv = cipher.getIV();
             byte[] ciphertext = cipher.doFinal(plaintext.getBytes("UTF-8"));
             
-            // Combine IV and ciphertext
             byte[] combined = new byte[iv.length + ciphertext.length];
             System.arraycopy(iv, 0, combined, 0, iv.length);
             System.arraycopy(ciphertext, 0, combined, iv.length, ciphertext.length);
@@ -96,7 +85,6 @@ public class KeystorePlugin extends Plugin {
         try {
             byte[] combined = Base64.decode(ciphertext, Base64.DEFAULT);
             
-            // Extract IV and ciphertext
             byte[] iv = new byte[GCM_IV_LENGTH];
             byte[] actualCiphertext = new byte[combined.length - GCM_IV_LENGTH];
             System.arraycopy(combined, 0, iv, 0, GCM_IV_LENGTH);
@@ -143,9 +131,7 @@ public class KeystorePlugin extends Plugin {
         }
     }
     
-    private void generateKey() throws NoSuchAlgorithmException, 
-                                     InvalidAlgorithmParameterException, 
-                                     KeyStoreException {
+    private void generateKey() throws Exception {
         KeyGenerator keyGenerator = KeyGenerator.getInstance(
             KeyProperties.KEY_ALGORITHM_AES, 
             ANDROID_KEYSTORE
@@ -166,7 +152,7 @@ public class KeystorePlugin extends Plugin {
         keyGenerator.generateKey();
     }
     
-    private SecretKey getSecretKey() throws KeyStoreException, UnrecoverableKeyException, NoSuchAlgorithmException {
+    private SecretKey getSecretKey() throws Exception {
         return (SecretKey) keyStore.getKey(KEY_ALIAS, null);
     }
 }
