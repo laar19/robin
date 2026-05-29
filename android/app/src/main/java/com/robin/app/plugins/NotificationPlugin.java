@@ -127,7 +127,7 @@ public class NotificationPlugin extends Plugin {
                 result.put("granted", true);
                 call.resolve(result);
             } else {
-                requestPermissionForPermissionResult(new String[]{android.Manifest.permission.POST_NOTIFICATIONS}, call, "permissionCallback");
+                requestPermissionForPermissionResult(android.Manifest.permission.POST_NOTIFICATIONS, call, "permissionCallback");
             }
         } else {
             JSObject result = new JSObject();
