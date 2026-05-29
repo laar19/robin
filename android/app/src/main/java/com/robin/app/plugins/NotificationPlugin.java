@@ -4,7 +4,6 @@ import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
-import com.getcapacitor.annotation.PermissionCallback;
 import com.getcapacitor.JSObject;
 
 import android.app.NotificationManager;
@@ -122,29 +121,14 @@ public class NotificationPlugin extends Plugin {
     @PluginMethod
     public void requestPermission(PluginCall call) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            if (ContextCompat.checkSelfPermission(getContext(), android.Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
-                JSObject result = new JSObject();
-                result.put("granted", true);
-                call.resolve(result);
-            } else {
-                requestPermissionForPermissionResult(android.Manifest.permission.POST_NOTIFICATIONS, call, "permissionCallback");
-            }
-        } else {
+            boolean granted = ContextCompat.checkSelfPermission(getContext(), android.Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED;
             JSObject result = new JSObject();
-            result.put("granted", true);
-            call.resolve(result);
-        }
-    }
-    
-    @PermissionCallback
-    public void permissionCallback(PluginCall call) {
-        if (ContextCompat.checkSelfPermission(getContext(), android.Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
-            JSObject result = new JSObject();
-            result.put("granted", true);
+            result.put("granted", granted);
+            result.put("shouldRequest", !granted);
             call.resolve(result);
         } else {
             JSObject result = new JSObject();
-            result.put("granted", false);
+            result.put("granted", true);
             call.resolve(result);
         }
     }
