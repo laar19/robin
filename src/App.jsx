@@ -7,11 +7,16 @@ import StatusBar from './components/StatusBar'
 import SettingsScreen from './components/SettingsScreen'
 import ApiKeyModal from './components/ApiKeyModal'
 import FileShareModal from './components/FileShareModal'
+import ProcessingQueue from './components/ProcessingQueue'
+import HistoryList from './components/HistoryList'
 import { requestPermissions, checkPermissions } from './services/permissions'
 import { VoskPlugin, TtsPlugin, WhisperPlugin, PiperPlugin } from './services/capacitor-plugins'
 import { getSharedFile, clearSharedFile } from './services/fileHandlerService'
 import { getAllConfig, saveModel } from './services/apiStorageService'
 import { transcribeAudio, cancelTranscription } from './services/whisperApiService'
+import { getQueueStats } from './services/queueService'
+import { getStatsSummary } from './services/statsService'
+import { getLastEngine, setLastEngine, getDarkMode, setDarkMode } from './services/preferencesService'
 
 export default function App() {
   const [sttEngine, setSttEngine] = useState('vosk')
@@ -23,34 +28,29 @@ export default function App() {
   const [isRecording, setIsRecording] = useState(false)
   const [error, setError] = useState(null)
   const [permissionsGranted, setPermissionsGranted] = useState(false)
-  const [darkMode, setDarkMode] = useState(() => {
-    const saved = localStorage.getItem('darkMode')
-    return saved !== null ? JSON.parse(saved) : true
-  })
+  const [darkMode, setDarkModeState] = useState(() => getDarkMode())
 
+  // Modal states
   const [showSettings, setShowSettings] = useState(false)
   const [showApiKeyModal, setShowApiKeyModal] = useState(false)
   const [showFileShareModal, setShowFileShareModal] = useState(false)
+  const [showQueue, setShowQueue] = useState(false)
+  const [showHistory, setShowHistory] = useState(false)
+  
   const [sharedFile, setSharedFile] = useState(null)
+  const [queueStats, setQueueStats] = useState({ offline: { pending: 0 }, online: { pending: 0 } })
 
   useEffect(() => {
     initApp()
   }, [])
 
   useEffect(() => {
-    localStorage.setItem('darkMode', JSON.stringify(darkMode))
-    if (darkMode) {
-      document.documentElement.classList.add('dark')
-      document.documentElement.classList.remove('light')
-    } else {
-      document.documentElement.classList.add('light')
-      document.documentElement.classList.remove('dark')
-    }
+    setDarkMode(darkMode)
   }, [darkMode])
 
   useEffect(() => {
     const loadWhisperModel = async () => {
-      const model = await saveModel(whisperModel)
+      await saveModel(whisperModel)
     }
     loadWhisperModel()
   }, [whisperModel])
@@ -58,6 +58,14 @@ export default function App() {
   useEffect(() => {
     const cleanup = setupFileShareListener()
     return () => cleanup()
+  }, [])
+
+  useEffect(() => {
+    // Update queue stats periodically
+    const interval = setInterval(() => {
+      setQueueStats(getQueueStats())
+    }, 3000)
+    return () => clearInterval(interval)
   }, [])
 
   async function initApp() {
@@ -157,7 +165,7 @@ export default function App() {
   }
 
   function toggleTheme() {
-    setDarkMode(!darkMode)
+    setDarkModeState(!darkMode)
   }
 
   function handleWhisperModelChange(model) {
@@ -169,13 +177,38 @@ export default function App() {
     setShowSettings(false)
   }
 
+  function handleEngineChange(engine) {
+    setSttEngine(engine)
+    setLastEngine(engine)
+  }
+
+  const totalPending = queueStats.offline.pending + queueStats.online.pending
+
   return (
     <div className={`app-container ${darkMode ? 'dark' : 'light'}`}>
       <header>
         <div className="header-top">
           <h1>Robin</h1>
           <div className="header-actions">
-            <button className="settings-btn" onClick={() => setShowSettings(true)} title="Configuración">
+            <button 
+              className="queue-btn" 
+              onClick={() => setShowQueue(true)} 
+              title="Cola de procesamiento"
+            >
+              🔄 {totalPending > 0 && <span className="badge">{totalPending}</span>}
+            </button>
+            <button 
+              className="history-btn" 
+              onClick={() => setShowHistory(true)} 
+              title="Historial"
+            >
+              📜
+            </button>
+            <button 
+              className="settings-btn" 
+              onClick={() => setShowSettings(true)} 
+              title="Configuración"
+            >
               ⚙️
             </button>
             <button className="theme-toggle" onClick={toggleTheme} title="Cambiar tema">
@@ -222,15 +255,24 @@ export default function App() {
             </section>
 
             <section className="settings-section">
-              <h3>Configuración</h3>
+              <h3>Configuración Rápida</h3>
               <ModelSelector
                 sttEngine={sttEngine}
                 ttsEngine={ttsEngine}
-                onSttChange={setSttEngine}
+                onSttChange={handleEngineChange}
                 onTtsChange={setTtsEngine}
                 onWhisperModelChange={handleWhisperModelChange}
               />
               <LanguageSelector value={language} onChange={setLanguage} />
+              
+              <div className="quick-actions">
+                <button className="btn-action" onClick={() => setShowQueue(true)}>
+                  🔄 Cola {totalPending > 0 && `(${totalPending})`}
+                </button>
+                <button className="btn-action" onClick={() => setShowHistory(true)}>
+                  📜 Historial
+                </button>
+              </div>
             </section>
           </>
         )}
@@ -239,13 +281,19 @@ export default function App() {
       {error && <div className="error-toast">{error}</div>}
 
       <footer>
-        <p>Procesamiento 100% local (excepto API cloud)</p>
+        <p>
+          {sttEngine === 'whisper-api' 
+            ? '☁️ Procesamiento cloud (Whisper API)' 
+            : '📱 Procesamiento 100% local'}
+        </p>
       </footer>
 
       <SettingsScreen
         isOpen={showSettings}
         onClose={() => setShowSettings(false)}
         onOpenApiKeyModal={() => setShowApiKeyModal(true)}
+        onOpenQueue={() => setShowQueue(true)}
+        onOpenHistory={() => setShowHistory(true)}
       />
 
       <ApiKeyModal
@@ -263,6 +311,16 @@ export default function App() {
           clearSharedFile()
         }}
         sttEngine={sttEngine}
+      />
+
+      <ProcessingQueue
+        isOpen={showQueue}
+        onClose={() => setShowQueue(false)}
+      />
+
+      <HistoryList
+        isOpen={showHistory}
+        onClose={() => setShowHistory(false)}
       />
     </div>
   )

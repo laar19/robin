@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react'
+import EngineSelector from './EngineSelector'
 import ProgressBar from './ProgressBar'
 import TranscriptionResult from './TranscriptionResult'
 import { transcribeAudio, cancelTranscription, estimateCostFromFile, WHISPER_MODELS } from '../services/whisperApiService'
 import { getAllConfig } from '../services/apiStorageService'
+import { getLastEngine, setLastEngine } from '../services/preferencesService'
 import { 
   getFileIcon, 
   formatFileSize, 
@@ -12,8 +14,11 @@ import {
   cleanupExtractedFile,
   getMaxFileSize,
 } from '../services/fileHandlerService'
+import { addToQueue, updateItemStatus, STATUS } from '../services/queueService'
+import { recordTranscription } from '../services/statsService'
+import { addToHistory } from '../services/historyService'
 
-export default function FileShareModal({ isOpen, file, onClose, sttEngine }) {
+export default function FileShareModal({ isOpen, file, onClose, sttEngine: globalSttEngine }) {
   const [status, setStatus] = useState('idle')
   const [progress, setProgress] = useState(0)
   const [transcription, setTranscription] = useState('')
@@ -21,11 +26,16 @@ export default function FileShareModal({ isOpen, file, onClose, sttEngine }) {
   const [extractedAudioPath, setExtractedAudioPath] = useState(null)
   const [estimatedCost, setEstimatedCost] = useState(null)
   const [confirmed, setConfirmed] = useState(false)
-
+  const [selectedEngine, setSelectedEngine] = useState(globalSttEngine || 'vosk')
+  
   const maxSizes = getMaxFileSize()
 
   useEffect(() => {
     if (isOpen && file) {
+      // Usar último motor usado o el global
+      getLastEngine().then(lastEngine => {
+        setSelectedEngine(lastEngine || globalSttEngine || 'vosk')
+      })
       validateAndPrepare()
     }
     return () => {
@@ -34,6 +44,16 @@ export default function FileShareModal({ isOpen, file, onClose, sttEngine }) {
       }
     }
   }, [isOpen, file])
+
+  useEffect(() => {
+    // Actualizar cuando cambia el engine seleccionado
+    if (file && selectedEngine === 'whisper-api') {
+      const cost = estimateCostFromFile(file.file, 'whisper-large-v3')
+      setEstimatedCost(cost)
+    } else {
+      setEstimatedCost(null)
+    }
+  }, [selectedEngine, file])
 
   async function validateAndPrepare() {
     setStatus('idle')
@@ -53,71 +73,134 @@ export default function FileShareModal({ isOpen, file, onClose, sttEngine }) {
       return
     }
 
-    // Check if Whisper API is selected
-    if (sttEngine !== 'whisper-api') {
-      setError('Whisper API debe estar seleccionado como engine STT')
-      setStatus('error')
-      return
+    // Check API Key if using Whisper API
+    if (selectedEngine === 'whisper-api') {
+      const config = await getAllConfig()
+      if (!config.apiKey) {
+        setError('API Key no configurada. Configúrala en Ajustes.')
+        setStatus('error')
+        return
+      }
+      
+      // Estimate cost
+      const cost = estimateCostFromFile(file.file, config.model)
+      setEstimatedCost(cost)
     }
-
-    // Check API Key
-    const config = await getAllConfig()
-    if (!config.apiKey) {
-      setError('API Key no configurada. Configúrala en Ajustes.')
-      setStatus('error')
-      return
-    }
-
-    // Estimate cost
-    const cost = estimateCostFromFile(file.file, config.model)
-    setEstimatedCost(cost)
   }
 
   async function processFile() {
     if (!file || !confirmed) return
 
     try {
+      // Guardar preferencia del motor usado
+      setLastEngine(selectedEngine)
+      
+      // Agregar a la cola
+      const queueItem = addToQueue({
+        file: {
+          name: file.name,
+          size: file.size,
+          isVideo: file.isVideo,
+        },
+        engine: selectedEngine,
+        status: STATUS.PENDING,
+      })
+      
       const config = await getAllConfig()
       let audioFile = file.file
 
       // Extract audio from video if needed
       if (file.isVideo) {
         setStatus('extracting')
+        updateItemStatus(queueItem.id, STATUS.PROCESSING, 5)
         setProgress(0)
         
         try {
           const extractResult = await extractAudioFromVideo(file.uri, (p) => {
-            setProgress(Math.round(p * 0.3))
+            const newProgress = Math.round(p * 0.3)
+            setProgress(newProgress)
+            updateItemStatus(queueItem.id, STATUS.PROCESSING, newProgress)
           })
           setExtractedAudioPath(extractResult.audioPath)
           
           const audioBlob = await uriToBlob(extractResult.audioUri)
           audioFile = new File([audioBlob], 'extracted_audio.m4a', { type: 'audio/m4a' })
         } catch (e) {
+          updateItemStatus(queueItem.id, STATUS.FAILED, 0, e.message)
           throw new Error(`Error extrayendo audio: ${e.message}`)
         }
       }
 
-      // Upload and transcribe
-      setStatus('uploading')
-      setProgress(30)
+      // Process based on engine
+      if (selectedEngine === 'whisper-api') {
+        // Upload and transcribe via API
+        setStatus('uploading')
+        updateItemStatus(queueItem.id, STATUS.PROCESSING, 30)
+        setProgress(30)
 
-      const result = await transcribeAudio(audioFile, {
-        ...config,
-        onProgress: (uploadProgress) => {
-          setProgress(30 + Math.round(uploadProgress * 0.5))
-        },
-      })
+        const result = await transcribeAudio(audioFile, {
+          ...config,
+          onProgress: (uploadProgress) => {
+            const newProgress = 30 + Math.round(uploadProgress * 0.5)
+            setProgress(newProgress)
+            updateItemStatus(queueItem.id, STATUS.PROCESSING, newProgress)
+          },
+        })
 
-      setStatus('transcribing')
-      setProgress(90)
+        setStatus('transcribing')
+        setProgress(90)
+        updateItemStatus(queueItem.id, STATUS.PROCESSING, 90)
 
-      setTranscription(result.text)
-      setStatus('complete')
-      setProgress(100)
+        setTranscription(result.text)
+        setStatus('complete')
+        setProgress(100)
+        updateItemStatus(queueItem.id, STATUS.COMPLETED, 100, null, result.text)
+        
+        // Record stats
+        recordTranscription('whisper-api', config.model, result.duration || 0, estimatedCost || 0)
+        
+        // Save to history
+        addToHistory({
+          text: result.text,
+          filename: file.name,
+          engine: 'whisper-api',
+          model: config.model,
+          duration: result.duration,
+          cost: estimatedCost,
+          isVideo: file.isVideo,
+        })
 
-      // Save to history
-      saveToHistory(result.text, file.name)
+      } else {
+        // Offline processing (Vosk or Whisper local)
+        // For now, we'll simulate offline processing
+        // In a real implementation, this would call the native plugins
+        setStatus('processing')
+        updateItemStatus(queueItem.id, STATUS.PROCESSING, 50)
+        
+        // Simular procesamiento offline
+        await new Promise(resolve => setTimeout(resolve, 2000))
+        
+        setStatus('complete')
+        setProgress(100)
+        updateItemStatus(queueItem.id, STATUS.COMPLETED, 100)
+        
+        // Placeholder text for offline
+        const offlineText = '[Procesamiento offline completado - Texto no disponible en esta demo]'
+        setTranscription(offlineText)
+        
+        // Record stats
+        recordTranscription(selectedEngine, null, 0, 0)
+        
+        // Save to history
+        addToHistory({
+          text: offlineText,
+          filename: file.name,
+          engine: selectedEngine,
+          duration: 0,
+          cost: 0,
+          isVideo: file.isVideo,
+        })
+      }
 
     } catch (e) {
       if (e.message.includes('cancel')) {
@@ -132,23 +215,6 @@ export default function FileShareModal({ isOpen, file, onClose, sttEngine }) {
   async function uriToBlob(uri) {
     const response = await fetch(uri)
     return await response.blob()
-  }
-
-  function saveToHistory(text, filename) {
-    try {
-      const history = JSON.parse(localStorage.getItem('transcriptionHistory') || '[]')
-      history.unshift({
-        id: Date.now(),
-        text,
-        filename,
-        date: new Date().toISOString(),
-        engine: 'whisper-api',
-      })
-      // Keep only last 50 transcriptions
-      localStorage.setItem('transcriptionHistory', history.slice(0, 50))
-    } catch (e) {
-      console.error('Error saving to history:', e)
-    }
   }
 
   function handleCancel() {
@@ -192,6 +258,8 @@ export default function FileShareModal({ isOpen, file, onClose, sttEngine }) {
 
   if (!isOpen || !file) return null
 
+  const isOnline = selectedEngine === 'whisper-api'
+
   return (
     <div className="modal-overlay" onClick={handleClose}>
       <div className="modal-content file-share-modal" onClick={e => e.stopPropagation()}>
@@ -206,19 +274,31 @@ export default function FileShareModal({ isOpen, file, onClose, sttEngine }) {
               </div>
             </div>
 
-            <div className="cost-warning">
-              <h4>⚠️ Costo Estimado</h4>
-              <p className="cost-amount">~${estimatedCost} USD</p>
-              <p className="cost-details">
-                Este es un estimado basado en el tamaño del archivo.
-                El costo real depende de la duración del audio.
-              </p>
-              <div className="size-limits">
-                <p><strong>Límites:</strong></p>
-                <p>Audio: máx {maxSizes.audioFormatted}</p>
-                <p>Video: máx {maxSizes.videoFormatted}</p>
-              </div>
+            <div className="engine-selection-section">
+              <label>Selecciona el motor de transcripción:</label>
+              <EngineSelector
+                type="STT"
+                value={selectedEngine}
+                onChange={setSelectedEngine}
+                showInfo={true}
+              />
             </div>
+
+            {isOnline && (
+              <div className="cost-warning">
+                <h4>⚠️ Costo Estimado</h4>
+                <p className="cost-amount">~${estimatedCost} USD</p>
+                <p className="cost-details">
+                  Este es un estimado basado en el tamaño del archivo.
+                  El costo real depende de la duración del audio.
+                </p>
+                <div className="size-limits">
+                  <p><strong>Límites:</strong></p>
+                  <p>Audio: máx {maxSizes.audioFormatted}</p>
+                  <p>Video: máx {maxSizes.videoFormatted}</p>
+                </div>
+              </div>
+            )}
 
             <div className="confirmation-actions">
               <button className="btn btn-secondary" onClick={handleClose}>
@@ -231,13 +311,13 @@ export default function FileShareModal({ isOpen, file, onClose, sttEngine }) {
                   processFile()
                 }}
               >
-                💵 Confirmar (${estimatedCost}) y Transcribir
+                {isOnline ? `💵 Confirmar ($${estimatedCost})` : '▶️'} Procesar
               </button>
             </div>
           </>
         )}
 
-        {(status === 'extracting' || status === 'uploading' || status === 'transcribing') && (
+        {(status === 'extracting' || status === 'uploading' || status === 'transcribing' || status === 'processing') && (
           <ProgressBar
             progress={progress}
             status={status}
