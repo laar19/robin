@@ -36,7 +36,8 @@ if [ -f "models/es_ES-mls-medium.onnx" ]; then
 fi
 
 echo "📱 Generando APK debug..."
-cd android && ./gradlew assembleDebug
+echo "   → Limpiando build anterior..."
+cd android && ./gradlew clean && ./gradlew assembleDebug
 
 echo "💾 Copiando APK a apk-output/..."
 cd ..

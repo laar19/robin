@@ -46,11 +46,16 @@ body {
   transition: background 0.3s ease, color 0.3s ease;
 }
 
+html.dark, html.light {
+  background: var(--bg);
+}
+
 .app-container {
   max-width: 480px;
   margin: 0 auto;
   padding: 16px;
   min-height: 100vh;
+  background: var(--bg);
   display: flex;
   flex-direction: column;
   transition: background 0.3s ease;

@@ -12,7 +12,7 @@ function getPrefs() {
     lastEngine: 'vosk', // Último motor STT usado
     lastTtsEngine: 'android', // Último motor TTS usado
     lastLanguage: 'es',
-    darkMode: true,
+    darkMode: false,
     queueAutoStart: true, // Iniciar cola automáticamente
     showNotifications: true,
     confirmBeforeProcess: true, // Confirmar antes de procesar online

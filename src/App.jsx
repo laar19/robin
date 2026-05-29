@@ -46,7 +46,13 @@ export default function App() {
 
   useEffect(() => {
     setDarkMode(darkMode)
+    applyTheme(darkMode)
   }, [darkMode])
+
+  function applyTheme(dark) {
+    document.documentElement.classList.toggle('dark', dark)
+    document.documentElement.classList.toggle('light', !dark)
+  }
 
   useEffect(() => {
     const loadWhisperModel = async () => {
@@ -183,6 +189,8 @@ export default function App() {
   }
 
   const totalPending = queueStats.offline.pending + queueStats.online.pending
+
+  applyTheme(darkMode)
 
   return (
     <div className={`app-container ${darkMode ? 'dark' : 'light'}`}>
