@@ -14,7 +14,6 @@ import com.robin.app.plugins.NotificationPlugin;
 public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
         registerPlugin(VoskPlugin.class);
         registerPlugin(WhisperPlugin.class);
         registerPlugin(TtsPlugin.class);
@@ -23,5 +22,6 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(AudioExtractorPlugin.class);
         registerPlugin(KeystorePlugin.class);
         registerPlugin(NotificationPlugin.class);
+        super.onCreate(savedInstanceState);
     }
 }

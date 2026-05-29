@@ -4,6 +4,7 @@ import { WHISPER_MODELS } from '../services/whisperApiService'
 import { getStatsSummary, getApiCostStats } from '../services/statsService'
 import { getQueueStats } from '../services/queueService'
 import { getAllPrefs, resetPrefs } from '../services/preferencesService'
+import packageJson from '../../../package.json'
 
 export default function SettingsScreen({ 
   isOpen, 
@@ -248,7 +249,7 @@ export default function SettingsScreen({
         <div className="about-info">
           <div className="app-logo">🐦</div>
           <h4>Robin App</h4>
-          <p className="version">Versión 2.1.0</p>
+          <p className="version">Versión {packageJson.version}</p>
           <p className="license">Licencia: AGPL-3.0</p>
           
           <div className="features-list">
