@@ -4,6 +4,8 @@ import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
+import com.getcapacitor.annotation.Permission;
+import com.getcapacitor.annotation.PermissionCallback;
 import com.getcapacitor.JSObject;
 
 import android.app.NotificationManager;
@@ -27,6 +29,7 @@ public class NotificationPlugin extends Plugin {
     private static final String CHANNEL_ID = "robin_transcription_channel";
     private static final String CHANNEL_NAME = "Transcripciones Robin";
     private static final int DEFAULT_NOTIFICATION_ID = 1000;
+    private static final int NOTIFICATION_PERMISSION_ID = 12345;
     
     @Override
     public void load() {
@@ -124,15 +127,13 @@ public class NotificationPlugin extends Plugin {
     @PluginMethod
     public void requestPermission(PluginCall call) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            String permission = android.Manifest.permission.POST_NOTIFICATIONS;
-            
-            if (ContextCompat.checkSelfPermission(getContext(), permission) == PackageManager.PERMISSION_GRANTED) {
+            if (ContextCompat.checkSelfPermission(getContext(), android.Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
                 JSObject result = new JSObject();
                 result.put("granted", true);
                 call.resolve(result);
             } else {
-                saveCall(call);
-                requestPermissionForPermissionResult(permission);
+                saveCall(call, "permissionCallback");
+                requestPermissionForPermissionResult(new String[]{android.Manifest.permission.POST_NOTIFICATIONS}, NOTIFICATION_PERMISSION_ID);
             }
         } else {
             JSObject result = new JSObject();
@@ -141,15 +142,16 @@ public class NotificationPlugin extends Plugin {
         }
     }
     
-    @Override
-    protected void onRequestPermissionResult(int requestCode, String[] permissions, int[] grantResults) {
-        super.onRequestPermissionResult(requestCode, permissions, grantResults);
-        
-        PluginCall savedCall = getSavedCall();
-        if (savedCall != null && grantResults.length > 0) {
+    @PermissionCallback
+    public void permissionCallback(PluginCall call) {
+        if (ContextCompat.checkSelfPermission(getContext(), android.Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
             JSObject result = new JSObject();
-            result.put("granted", grantResults[0] == PackageManager.PERMISSION_GRANTED);
-            savedCall.resolve(result);
+            result.put("granted", true);
+            call.resolve(result);
+        } else {
+            JSObject result = new JSObject();
+            result.put("granted", false);
+            call.resolve(result);
         }
     }
 }
