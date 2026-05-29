@@ -11,6 +11,7 @@ import android.security.keystore.KeyProperties;
 import android.util.Base64;
 
 import java.security.KeyStore;
+import java.security.KeyStoreException;
 import javax.crypto.Cipher;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.KeyGenerator;
