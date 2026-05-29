@@ -11,5 +11,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(WhisperPlugin.class);
         registerPlugin(TtsPlugin.class);
         registerPlugin(PiperPlugin.class);
+        registerPlugin(FileHandlerPlugin.class);
+        registerPlugin(AudioExtractorPlugin.class);
     }
 }

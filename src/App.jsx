@@ -4,14 +4,20 @@ import TTSInput from './components/TTSInput'
 import ModelSelector from './components/ModelSelector'
 import LanguageSelector from './components/LanguageSelector'
 import StatusBar from './components/StatusBar'
-import AudioPlayer from './components/AudioPlayer'
+import SettingsScreen from './components/SettingsScreen'
+import ApiKeyModal from './components/ApiKeyModal'
+import FileShareModal from './components/FileShareModal'
 import { requestPermissions, checkPermissions } from './services/permissions'
 import { VoskPlugin, TtsPlugin, WhisperPlugin, PiperPlugin } from './services/capacitor-plugins'
+import { getSharedFile, clearSharedFile } from './services/fileHandlerService'
+import { getAllConfig, saveModel } from './services/apiStorageService'
+import { transcribeAudio, cancelTranscription } from './services/whisperApiService'
 
 export default function App() {
   const [sttEngine, setSttEngine] = useState('vosk')
   const [ttsEngine, setTtsEngine] = useState('android')
   const [language, setLanguage] = useState('es')
+  const [whisperModel, setWhisperModel] = useState('whisper-large-v3')
   const [transcription, setTranscription] = useState('')
   const [status, setStatus] = useState('idle')
   const [isRecording, setIsRecording] = useState(false)
@@ -21,6 +27,11 @@ export default function App() {
     const saved = localStorage.getItem('darkMode')
     return saved !== null ? JSON.parse(saved) : true
   })
+
+  const [showSettings, setShowSettings] = useState(false)
+  const [showApiKeyModal, setShowApiKeyModal] = useState(false)
+  const [showFileShareModal, setShowFileShareModal] = useState(false)
+  const [sharedFile, setSharedFile] = useState(null)
 
   useEffect(() => {
     initApp()
@@ -36,6 +47,18 @@ export default function App() {
       document.documentElement.classList.remove('dark')
     }
   }, [darkMode])
+
+  useEffect(() => {
+    const loadWhisperModel = async () => {
+      const model = await saveModel(whisperModel)
+    }
+    loadWhisperModel()
+  }, [whisperModel])
+
+  useEffect(() => {
+    const cleanup = setupFileShareListener()
+    return () => cleanup()
+  }, [])
 
   async function initApp() {
     const permResult = await requestPermissions()
@@ -59,12 +82,32 @@ export default function App() {
     }
   }
 
+  function setupFileShareListener() {
+    const FileHandlerPlugin = window.FileHandlerPlugin
+    if (!FileHandlerPlugin) return () => {}
+
+    const listener = FileHandlerPlugin.addListener('onFileShared', async (data) => {
+      if (data.hasSharedFile) {
+        const file = await getSharedFile()
+        setSharedFile(file)
+        setShowFileShareModal(true)
+      }
+    })
+
+    return () => listener.remove()
+  }
+
   async function handleStartRecording() {
     try {
       setIsRecording(true)
       setStatus('listening')
       setError(null)
-      await VoskPlugin.startListening()
+      
+      if (sttEngine === 'vosk') {
+        await VoskPlugin.startListening()
+      } else if (sttEngine === 'whisper') {
+        await WhisperPlugin.startListening()
+      }
     } catch (e) {
       setError(`Error de grabación: ${e.message}`)
       setIsRecording(false)
@@ -76,7 +119,18 @@ export default function App() {
     try {
       setIsRecording(false)
       setStatus('processing')
-      await VoskPlugin.stopListening()
+      
+      let result
+      if (sttEngine === 'vosk') {
+        result = await VoskPlugin.stopListening()
+      } else if (sttEngine === 'whisper') {
+        result = await WhisperPlugin.stopListening()
+      }
+      
+      if (result?.text) {
+        setTranscription(result.text)
+      }
+      
       setStatus('ready')
     } catch (e) {
       setError(`Error al detener: ${e.message}`)
@@ -88,7 +142,13 @@ export default function App() {
     try {
       setStatus('speaking')
       setError(null)
-      await TtsPlugin.speak({ text, lang: language, speed: 1.0 })
+      
+      if (ttsEngine === 'android') {
+        await TtsPlugin.speak({ text, lang: language, speed: 1.0 })
+      } else {
+        await PiperPlugin.synthesize({ text, modelPath: 'models/es_ES-mls-medium.onnx' })
+      }
+      
       setStatus('ready')
     } catch (e) {
       setError(`Error TTS: ${e.message}`)
@@ -100,23 +160,37 @@ export default function App() {
     setDarkMode(!darkMode)
   }
 
+  function handleWhisperModelChange(model) {
+    setWhisperModel(model)
+  }
+
+  function handleApiKeySaved() {
+    setShowApiKeyModal(false)
+    setShowSettings(false)
+  }
+
   return (
     <div className={`app-container ${darkMode ? 'dark' : 'light'}`}>
       <header>
         <div className="header-top">
           <h1>Robin</h1>
-          <button className="theme-toggle" onClick={toggleTheme} title="Cambiar tema">
-            {darkMode ? (
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <circle cx="12" cy="12" r="5"/>
-                <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
-              </svg>
-            ) : (
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/>
-              </svg>
-            )}
-          </button>
+          <div className="header-actions">
+            <button className="settings-btn" onClick={() => setShowSettings(true)} title="Configuración">
+              ⚙️
+            </button>
+            <button className="theme-toggle" onClick={toggleTheme} title="Cambiar tema">
+              {darkMode ? (
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="12" r="5"/>
+                  <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
+                </svg>
+              ) : (
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/>
+                </svg>
+              )}
+            </button>
+          </div>
         </div>
         <StatusBar status={status} />
       </header>
@@ -154,6 +228,7 @@ export default function App() {
                 ttsEngine={ttsEngine}
                 onSttChange={setSttEngine}
                 onTtsChange={setTtsEngine}
+                onWhisperModelChange={handleWhisperModelChange}
               />
               <LanguageSelector value={language} onChange={setLanguage} />
             </section>
@@ -164,8 +239,31 @@ export default function App() {
       {error && <div className="error-toast">{error}</div>}
 
       <footer>
-        <p>Procesamiento 100% local</p>
+        <p>Procesamiento 100% local (excepto API cloud)</p>
       </footer>
+
+      <SettingsScreen
+        isOpen={showSettings}
+        onClose={() => setShowSettings(false)}
+        onOpenApiKeyModal={() => setShowApiKeyModal(true)}
+      />
+
+      <ApiKeyModal
+        isOpen={showApiKeyModal}
+        onClose={() => setShowApiKeyModal(false)}
+        onSave={handleApiKeySaved}
+      />
+
+      <FileShareModal
+        isOpen={showFileShareModal}
+        file={sharedFile}
+        onClose={() => {
+          setShowFileShareModal(false)
+          setSharedFile(null)
+          clearSharedFile()
+        }}
+        sttEngine={sttEngine}
+      />
     </div>
   )
 }
