@@ -38,29 +38,39 @@ public class AudioExtractorPlugin extends Plugin {
                     uri = Uri.fromFile(new File(videoUri));
                 }
 
-                File outputFile = new File(outputDir, "extracted_audio_" + System.currentTimeMillis() + ".m4a");
-
                 MediaExtractor extractor = new MediaExtractor();
                 extractor.setDataSource(getContext(), uri, null);
 
                 int audioTrackIndex = -1;
                 MediaFormat audioFormat = null;
+                String audioMimeType = null;
+                StringBuilder availableTracks = new StringBuilder();
 
                 for (int i = 0; i < extractor.getTrackCount(); i++) {
                     MediaFormat format = extractor.getTrackFormat(i);
                     String mime = format.getString(MediaFormat.KEY_MIME);
-                    if (mime != null && mime.startsWith("audio/")) {
-                        audioTrackIndex = i;
-                        audioFormat = format;
-                        break;
+                    if (mime != null) {
+                        availableTracks.append(mime).append(" ");
+                        if (mime.startsWith("audio/")) {
+                            audioTrackIndex = i;
+                            audioFormat = format;
+                            audioMimeType = mime;
+                            break;
+                        }
                     }
                 }
 
                 if (audioTrackIndex == -1) {
                     extractor.release();
-                    call.reject("No audio track found in video");
+                    JSObject errorData = new JSObject();
+                    errorData.put("error", "No audio track found");
+                    errorData.put("availableTracks", availableTracks.toString().trim());
+                    errorData.put("videoUri", videoUri);
+                    call.reject("No audio track found. Available: " + availableTracks.toString().trim());
                     return;
                 }
+
+                File outputFile = new File(outputDir, "extracted_audio_" + System.currentTimeMillis() + ".m4a");
 
                 MediaMuxer muxer = new MediaMuxer(
                     outputFile.getAbsolutePath(),
@@ -124,11 +134,17 @@ public class AudioExtractorPlugin extends Plugin {
                 JSObject result = new JSObject();
                 result.put("audioPath", outputFile.getAbsolutePath());
                 result.put("audioUri", Uri.fromFile(outputFile).toString());
+                result.put("audioFormat", audioMimeType);
                 result.put("success", true);
                 call.resolve(result);
 
             } catch (IOException e) {
+                JSObject errorData = new JSObject();
+                errorData.put("error", "IO error: " + e.getMessage());
+                errorData.put("videoUri", videoUri);
                 call.reject("Error extracting audio: " + e.getMessage());
+            } catch (IllegalStateException e) {
+                call.reject("Unsupported video format or codec: " + e.getMessage());
             } catch (Exception e) {
                 call.reject("Error: " + e.getMessage());
             }

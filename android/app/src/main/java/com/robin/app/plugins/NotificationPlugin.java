@@ -11,11 +11,14 @@ import android.app.NotificationChannel;
 import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.os.Build;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 
 import androidx.core.app.NotificationCompat;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
 
 @CapacitorPlugin(name = "NotificationPlugin")
 public class NotificationPlugin extends Plugin {
@@ -120,10 +123,33 @@ public class NotificationPlugin extends Plugin {
     
     @PluginMethod
     public void requestPermission(PluginCall call) {
-        // For Android 13+, we need POST_NOTIFICATIONS permission
-        // This is already declared in AndroidManifest.xml
-        JSObject result = new JSObject();
-        result.put("granted", true); // Permission is granted at install time for now
-        call.resolve(result);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            String permission = android.Manifest.permission.POST_NOTIFICATIONS;
+            
+            if (ContextCompat.checkSelfPermission(getContext(), permission) == PackageManager.PERMISSION_GRANTED) {
+                JSObject result = new JSObject();
+                result.put("granted", true);
+                call.resolve(result);
+            } else {
+                saveCall(call);
+                requestPermissionForPermissionResult(permission);
+            }
+        } else {
+            JSObject result = new JSObject();
+            result.put("granted", true);
+            call.resolve(result);
+        }
+    }
+    
+    @Override
+    protected void onRequestPermissionResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionResult(requestCode, permissions, grantResults);
+        
+        PluginCall savedCall = getSavedCall();
+        if (savedCall != null && grantResults.length > 0) {
+            JSObject result = new JSObject();
+            result.put("granted", grantResults[0] == PackageManager.PERMISSION_GRANTED);
+            savedCall.resolve(result);
+        }
     }
 }

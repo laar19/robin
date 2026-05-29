@@ -91,6 +91,15 @@ export default function ApiKeyModal({ isOpen, onClose, onSave }) {
                 Requiere conexión a internet. Se cobra por minuto de audio.
               </div>
 
+              <div className="alert alert-warning">
+                <strong>⚠️ Importante sobre seguridad:</strong>
+                <ul style={{ margin: '8px 0 0 0', paddingLeft: '20px' }}>
+                  <li>Tu API Key se cifra con Android Keystore (hardware-backed)</li>
+                  <li><strong>Si desinstalas la app, perderás tu API Key guardada</strong></li>
+                  <li>Recomendación: Guarda una copia en un gestor de contraseñas</li>
+                </ul>
+              </div>
+
               <div className="form-group">
                 <label>API Key <span className="required">*</span></label>
                 <div className="input-with-actions">

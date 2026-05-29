@@ -128,6 +128,7 @@ public class VoskPlugin extends Plugin {
     @PluginMethod
     public void transcribeFile(PluginCall call) {
         String filePath = call.getString("filePath");
+        long maxFileSize = call.getInt("maxFileSize", 100) * 1024 * 1024;
         
         if (filePath == null || filePath.isEmpty()) {
             call.reject("File path is required");
@@ -145,6 +146,11 @@ public class VoskPlugin extends Plugin {
             return;
         }
         
+        if (audioFile.length() > maxFileSize) {
+            call.reject("File too large: " + (audioFile.length() / (1024 * 1024)) + "MB exceeds limit of " + (maxFileSize / (1024 * 1024)) + "MB");
+            return;
+        }
+        
         new Thread(() -> {
             try {
                 FileInputStream fis = new FileInputStream(audioFile);
@@ -154,6 +160,7 @@ public class VoskPlugin extends Plugin {
                 Recognizer fileRecognizer = new Recognizer(voskModel, 16000.0f);
                 StringBuilder result = new StringBuilder();
                 int totalBytes = 0;
+                long fileSize = audioFile.length();
                 
                 while ((bytesRead = fis.read(buffer)) != -1) {
                     if (fileRecognizer.acceptWaveForm(buffer, bytesRead)) {
@@ -162,6 +169,8 @@ public class VoskPlugin extends Plugin {
                             JSObject progressData = new JSObject();
                             progressData.put("partial", partial);
                             totalBytes += bytesRead;
+                            int progress = (int)((totalBytes * 100) / fileSize);
+                            progressData.put("progress", progress);
                             notifyListeners("onPartialTranscription", progressData);
                         }
                     }
