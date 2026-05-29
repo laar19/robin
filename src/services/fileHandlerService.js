@@ -1,11 +1,12 @@
 import { Capacitor } from '@capacitor/core'
+import { registerPlugin } from '@capacitor/core'
 
 const FileHandlerPlugin = Capacitor.isNativePlatform()
-  ? (await import('@capacitor/core')).registerPlugin('FileHandler')
+  ? registerPlugin('FileHandler')
   : null
 
 const AudioExtractorPlugin = Capacitor.isNativePlatform()
-  ? (await import('@capacitor/core')).registerPlugin('AudioExtractor')
+  ? registerPlugin('AudioExtractor')
   : null
 
 export async function getSharedFile() {
