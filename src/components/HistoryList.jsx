@@ -7,10 +7,8 @@ import {
   filterByEngine,
   toggleFavorite,
   getFavorites,
-  exportHistoryToJSON,
-  exportHistoryToCSV,
 } from '../services/historyService'
-import { copyToClipboard, shareTranscription, exportToTxtWithMetadata } from '../services/exportService'
+import { copyToClipboard, shareTranscription, exportToTxtWithMetadata, exportHistoryToJSON, exportHistoryToCSV } from '../services/exportService'
 
 function HistoryItem({ item, onRemove, onFavorite }) {
   const [expanded, setExpanded] = useState(false)
