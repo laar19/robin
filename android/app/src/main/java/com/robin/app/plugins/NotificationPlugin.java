@@ -17,6 +17,8 @@ import android.os.Build;
 import androidx.core.app.NotificationCompat;
 import androidx.core.content.ContextCompat;
 
+import com.robin.app.MainActivity;
+
 @CapacitorPlugin(name = "NotificationPlugin")
 public class NotificationPlugin extends Plugin {
     
