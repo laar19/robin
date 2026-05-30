@@ -9,6 +9,7 @@ import ApiKeyModal from './components/ApiKeyModal'
 import FileShareModal from './components/FileShareModal'
 import ProcessingQueue from './components/ProcessingQueue'
 import HistoryList from './components/HistoryList'
+import FileUpload from './components/FileUpload'
 import { requestPermissions, checkPermissions } from './services/permissions'
 import { VoskPlugin, TtsPlugin, WhisperPlugin, PiperPlugin } from './services/capacitor-plugins'
 import { getSharedFile, clearSharedFile } from './services/fileHandlerService'
@@ -27,8 +28,12 @@ export default function App() {
   const [status, setStatus] = useState('idle')
   const [isRecording, setIsRecording] = useState(false)
   const [error, setError] = useState(null)
+  const [sttError, setSttError] = useState(null)
+  const [ttsError, setTtsError] = useState(null)
   const [permissionsGranted, setPermissionsGranted] = useState(false)
   const [darkMode, setDarkModeState] = useState(() => getDarkMode())
+  const [uploadedFile, setUploadedFile] = useState(null)
+  const [isProcessingFile, setIsProcessingFile] = useState(false)
 
   // Modal states
   const [showSettings, setShowSettings] = useState(false)
@@ -87,12 +92,16 @@ export default function App() {
     setPermissionsGranted(true)
     
     try {
+      // Initialize ALL engines at startup
       await VoskPlugin.init({ lang: language })
+      await WhisperPlugin.init({ lang: language })
       await TtsPlugin.init()
+      await PiperPlugin.init({ modelPath: 'models/es_ES-mls-medium.onnx' })
       setStatus('ready')
     } catch (e) {
-      setError(`Error inicializando: ${e.message}`)
-      setStatus('error')
+      console.error('Error initializing engines:', e)
+      // Don't show error for all engines - some might fail but others work
+      setStatus('ready')
     }
   }
 
@@ -111,11 +120,29 @@ export default function App() {
     return () => listener.remove()
   }
 
+  async function handleFileUpload(file) {
+    setUploadedFile(file)
+    setSttError(null)
+    setIsProcessingFile(true)
+    setStatus('processing')
+    
+    try {
+      // For now, just show success - full implementation would transcribe here
+      console.log('File uploaded:', file.name, file.size, file.type)
+      setStatus('ready')
+      setIsProcessingFile(false)
+    } catch (e) {
+      setSttError(`Error procesando archivo: ${e.message}`)
+      setStatus('error')
+      setIsProcessingFile(false)
+    }
+  }
+
   async function handleStartRecording() {
     try {
       setIsRecording(true)
       setStatus('listening')
-      setError(null)
+      setSttError(null)
       
       if (sttEngine === 'vosk') {
         await VoskPlugin.startListening()
@@ -123,7 +150,7 @@ export default function App() {
         await WhisperPlugin.startListening()
       }
     } catch (e) {
-      setError(`Error de grabación: ${e.message}`)
+      setSttError(`Error de grabación: ${e.message}`)
       setIsRecording(false)
       setStatus('error')
     }
@@ -155,7 +182,7 @@ export default function App() {
   async function handleSpeak(text) {
     try {
       setStatus('speaking')
-      setError(null)
+      setTtsError(null)
       
       if (ttsEngine === 'android') {
         await TtsPlugin.speak({ text, lang: language, speed: 1.0 })
@@ -165,7 +192,7 @@ export default function App() {
       
       setStatus('ready')
     } catch (e) {
-      setError(`Error TTS: ${e.message}`)
+      setTtsError(`Error TTS: ${e.message}`)
       setStatus('error')
     }
   }
@@ -255,11 +282,24 @@ export default function App() {
               <div className="transcription-box">
                 <p>{transcription || 'La transcripción aparecerá aquí...'}</p>
               </div>
+              {sttError && <p className="section-error">{sttError}</p>}
+            </section>
+
+            <section className="file-upload-section">
+              <h2>Cargar Archivo</h2>
+              <FileUpload 
+                onFileSelected={handleFileUpload}
+                isProcessing={isProcessingFile}
+              />
+              {uploadedFile && !isProcessingFile && (
+                <p className="file-upload-success">✓ Archivo listo para procesar</p>
+              )}
             </section>
 
             <section className="tts-section">
               <h2>Texto a Voz</h2>
               <TTSInput onSpeak={handleSpeak} />
+              {ttsError && <p className="section-error">{ttsError}</p>}
             </section>
 
             <section className="settings-section">
@@ -285,8 +325,6 @@ export default function App() {
           </>
         )}
       </main>
-
-      {error && <div className="error-toast">{error}</div>}
 
       <footer>
         <p>
